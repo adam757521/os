@@ -25,8 +25,8 @@ start:
     sub edx, ebx
 
     ; TODO: dynamic sectors
-    ;cmp edx, 488 
-    ;jg error
+    cmp edx, 1512
+    jg error
 
     mov si, 0x7E1C
     mov di, 0x10
@@ -127,7 +127,7 @@ gdtr:
 dap:
     db 0x10 ; size
     db 0x00
-    dw 0x0002 ; sectors to read
+    dw 0x0003 ; sectors to read
     dw 0x7E00 ; offset (temporary buffer)
     dw 0x0000 ; segment 
     dd 0x00000001 ; LBA lower 32
