@@ -67,8 +67,30 @@ protected_mode:
     mov ss, ax
 
     mov esp, dword [0x7E18]
+    ; TODO: move jump somewhere else(maybe to long mode label)
+    jmp 0x100000 
+long_mode:
+       ; Enable PAE for 64 bit paging
+    mov eax, cr4
+    or eax, 1 << 5         ; PAE
+    mov cr4, eax
 
-    jmp 0x100000
+  mov eax, page_directory  ; TODO:add a page page_directory
+    mov cr3, eax
+
+    
+    mov ecx, 0xC0000080     ; IA32_EFER MSR
+    rdmsr
+    or eax, 1 << 8          ; LME activate
+    wrmsr
+
+    ; Enable paging
+    mov eax, cr0
+    or eax, 1 << 31         ; PG
+    mov cr0, eax
+
+    ;although we set up all the registers to be in long mode the cpu dosent enter long mode until a FAR jump occurs and Enable long mode
+    jmp CODE64_SEL:long_mode_start
 check_a20:
     push ds
     push si
