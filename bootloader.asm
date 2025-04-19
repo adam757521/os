@@ -25,7 +25,7 @@ start:
     sub edx, ebx
 
     ; TODO: dynamic sectors
-    cmp edx, 1512
+    cmp edx, 3560
     jg error
 
     mov si, 0x7E1C
@@ -67,30 +67,51 @@ protected_mode:
     mov ss, ax
 
     mov esp, dword [0x7E18]
-    ; TODO: move jump somewhere else(maybe to long mode label)
-    jmp 0x100000 
-long_mode:
-       ; Enable PAE for 64 bit paging
+
+    mov eax, pde
+    shl eax, 4
+    mov [pdpte_shifted_pde], eax
+
+    mov eax, pdpte
+    shl eax, 4
+    mov [pml4e_shifted_pdpte], eax
+
+    mov eax, pml4e
+    shl eax, 4
+    mov [pml4_cr3_shifted_pml4], eax
+
+    ; PAE
     mov eax, cr4
-    or eax, 1 << 5         ; PAE
+    or eax, 1 << 5
     mov cr4, eax
 
-  mov eax, page_directory  ; TODO:add a page page_directory
+    mov eax, pml4_cr3
     mov cr3, eax
 
-    
-    mov ecx, 0xC0000080     ; IA32_EFER MSR
+    ; IA32_EFER MSR
+    mov ecx, 0xC0000080
     rdmsr
-    or eax, 1 << 8          ; LME activate
+    ; LME
+    or eax, 1 << 8
     wrmsr
 
-    ; Enable paging
-    mov eax, cr0
-    or eax, 1 << 31         ; PG
-    mov cr0, eax
+    ; Compatability layer for long mode (32 bit)
+    ; GDT rewrite
+    mov byte [_general_flag], 0xAF
+    mov byte [_stack_flag], 0xAF
+    lgdt [gdtr]
 
-    ;although we set up all the registers to be in long mode the cpu dosent enter long mode until a FAR jump occurs and Enable long mode
-    jmp CODE64_SEL:long_mode_start
+    ; PG
+    mov eax, cr0
+    or eax, 1 << 31
+    mov cr0, eax 
+
+    ; TODO: issue with this not being mapped
+    ; TODO: issue with PML4 not being an actual list
+    xor eax, eax
+
+    jmp 0x08:0x0
+bits 16
 check_a20:
     push ds
     push si
@@ -126,6 +147,36 @@ error:
     mov al, 'f'
     int 0x10
     hlt
+
+pde:
+    db 0x8B
+    db 0x10
+    ; shift for readability
+    db 0x00
+    db 0x00
+    db 0x00
+    db 0x02
+    db 0x00
+    db 0x00
+pdpte:
+    db 0x0B
+pdpte_shifted_pde:
+    dd 0xFFFFFFFF
+    dw 0x00
+    db 0x00
+pml4e:
+    db 0x0B
+pml4e_shifted_pdpte:
+    dd 0xFFFFFFFF
+    dw 0x00
+    db 0x00
+pml4_cr3:
+    db 0x08
+pml4_cr3_shifted_pml4:
+    dd 0xFFFFFFFF
+    dw 0x00
+    db 0x00
+
 gdt:
     dq 0
 _general_segment:
@@ -133,6 +184,7 @@ _general_segment:
     dw 0x0000
     db 0x00
     db 0x9B
+_general_flag:
     db 0xCF
     db 0x00
 _stack_segment:
@@ -140,6 +192,7 @@ _stack_segment:
     dw 0x0000
     db 0x00
     db 0x97
+_stack_flag:
     db 0xCF
     db 0x00
 gdt_end:
@@ -149,7 +202,7 @@ gdtr:
 dap:
     db 0x10 ; size
     db 0x00
-    dw 0x0003 ; sectors to read
+    dw 0x0007 ; sectors to read
     dw 0x7E00 ; offset (temporary buffer)
     dw 0x0000 ; segment 
     dd 0x00000001 ; LBA lower 32
