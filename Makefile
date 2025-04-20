@@ -4,7 +4,7 @@ CFLAGS = -m32 -c -ffreestanding -fno-pie -nostdlib -fno-stack-protector -mgenera
 C_SOURCES := $(shell find kernel -name '*.c')
 OBJ_FILES := $(patsubst kernel/%.c, build/o/%.o, $(C_SOURCES))
 
-build/bootloader.bin: bootloader.asm
+build/bootloader.bin: bootloader/bootloader.asm
 	nasm -f bin $< -o $@
 
 build/o/%.o: kernel/%.c 
