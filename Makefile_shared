@@ -1,0 +1,11 @@
+# shared files in zig
+build/shared_32.o:
+	zig build-obj shared/shared_32.zig -target x86-freestanding -O ReleaseSmall -femit-bin=build/shared_32
+	# Remove the executable file
+	rm build/shared_32
+
+build/test_bootloader.bin: build/shared_32.o
+	nasm -f elf32 bootloader/test.asm -o build/test_bootloader.o
+	ld -m elf_i386 -o build/test_bootloader build/test_bootloader.o build/shared_32.o
+
+all: build/test_bootloader.bin
