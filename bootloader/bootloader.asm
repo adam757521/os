@@ -12,17 +12,26 @@ start:
     sub sp, 0x30
     mov bp, sp
 
+    ;mov si, dapack 
+    ;mov ah, 0x42
+    ;mov dl, 0x80
+    ;int 0x13
+
     mov ah, 8h
     mov dl, 0x80
     int 13h
 
     inc dh
+    and cl, 0x3F
     xor dl, dl
     or dl, cl
+    ; first byte - head
+    ; second byte - SPT
     mov [bp], dx
 
     mov bx, 0x7E00
-    mov si, 1
+    mov si, 0x1FA2
+    mov al, 1
     call read_sector_lba
 
     mov si, 0x7E0B
@@ -95,45 +104,7 @@ cluster_to_lba:
     ;add ax, [root_dir_sectors]
     ret
 
-; Read (bx dest, si lba, al start_sector)
-read_sector_lba:
-    push ax
-    push bx
-
-    mov al, [bp] 
-    mov dh, [bp+1]
-    mul dh
-
-    mov ax, dx
-    div si
-
-    ;mov ax,[bpb_struct + 0xd] ; sectors per track
-    ;mov bx,[bpb_struct + 0xF] ; head number
-    mul bx
-    mov bx,ax
-    mov ax,si
-    div bx ; 
-    mov ch,al
-    mov ax,si
-    ;mov bx,[bpb_struct+0xd]
-    div bx
-    xor dx,dx
-    ;mov bx,[bpb_struct+0xF]
-    div bx
-    mov ax,dx
-    mov dh,al
-    push dx
-    xor dx,dx
-    mov ax ,si
-    ;mov bx,[bpb_struct+0xd]
-    div bx
-    mov ax,dx
-    inc ax
-    mov cl,al ;
-    pop dx
-    pop bx
-    pop ax
-    jmp read_sector
+; Read (bx dest, si lba, al sector_count)
 
 ; Read(bx dest, al sector_count, cl start_sector, ch cylinder, dh head)
 read_sector:
@@ -157,6 +128,14 @@ load_cluster:
 
 filename db 'KERNEL  BIN'
 file_cluster dw 0
+dapack:
+db 0x10
+db 0
+dw 16
+dw 0x7E00
+dw 0
+dd 8098
+dd 0
 
 times 510 - ($-$$) db 0
 dw 0xAA55
