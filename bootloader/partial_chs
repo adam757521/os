@@ -1,0 +1,40 @@
+
+read_sector_lba:
+    push ax
+
+    mov al, [bp] 
+    mov dh, [bp+1]
+    mul dh
+
+    push si
+    xor dx, dx
+    ; Swaps AX and SI register values
+    xchg ax, si
+    ; Divide DX:AX by SI, store result on AX remainder on DX
+    div si 
+    mov ch, al
+    ; Cylinder on ax 
+
+    ; Load LBA / SPT on AX
+    pop si 
+    xor dx, dx
+    mov ax, si
+    xor di, di
+    mov di, word [bp + 1]
+    and di, 0x00FF
+    div di 
+
+    ; Remainder + 1 - Sector
+    inc dx
+    mov cl, dl
+
+    xor dx, dx
+    mov di, word [bp]
+    and di, 0x00FF
+    div di
+    mov dh, al
+    ; Head on AH
+
+    pop ax
+
+    jmp read_sector
