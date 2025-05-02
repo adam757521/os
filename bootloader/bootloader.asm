@@ -122,11 +122,13 @@ done:
 
     xor cx, cx
     mov bx, 0x8000
-    mov bp, sp
 
     mov ax, [kernel_file_cluster]
     mov dx, [kernel_file_cluster+0x2]
     call traverse_fat_copy_file
+
+    push cx
+    push bx
 
     mov ax, [stage2_file_cluster]
     mov dx, [stage2_file_cluster+0x2]
@@ -143,29 +145,29 @@ _shift_right:
 
     mov di, bx
 
-    pop bx
-    pop cx
+    mov bp, sp
+    mov bx, [bp]
+    mov cx, [bp+2]
 
     mov ax, [inter_stage_file_cluster]
     mov dx, [inter_stage_file_cluster+0x2]
     call traverse_fat_copy_file
 
+    push cx
+    push bx
+
+    ; TODO: if this size exceeds 480kb we have a problem
     cmp cx, 0x0007
     jae _hang
 
-    ; fuck gdb
-    mov ds, di
-    mov es, di
-    ;mov word [inter_stage_seg+2], di
-    jmp 0x14a0:0x0
-    ;jmp far [ds:0x0] 
+    ;mov ds, di
+    ;mov es, di
+    push di
+    mov [inter_stage_seg+2], di
+    jmp far [inter_stage_seg] 
 
     ; Cleanup BPB
     ;add sp, 0x30
-
-    ; Pass the kernel pointer, stage 2 pointer, inter stage pointer (for size calculation) and pointer for end of inter stage
-
-    ; TODO: if this size exceeds 480kb we have a problem
 _hang:
     jmp $
 

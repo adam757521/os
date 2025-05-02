@@ -1,18 +1,23 @@
 bits 16
 
-; This should receive a data structure containins kernel file start, stage2 file start
-_test:
-    mov ah, 0x0e
-    mov al, 'f'
-    int 0x10
-    hlt
+;stack frame -
+; offset (size)
+;0x0 (2) - 0x14a0 (segment)
+;2 (4) - 0x14c00 (end of inter)
+;6 (4) - 0x14a00 (start of inter)
+;10 (4) - 0x14800 (start of stage2)
+; start of kernel is always 0x8000
 
-    mov ax, 0x14a0
-    mov ds, ax
+_start:
     mov bp, sp
+    mov ax, word [bp]
+    mov es, ax
+    mov ds, ax
+
     ; jump to protected mode (also possibly get shit from the bios)
     ; TODO: parse bootloader ELF to after kernel ELF (program)
-    cli
+    lgdt [gdtr]
+
     mov ax, 0x08
     mov ds, ax
     mov es, ax
@@ -21,9 +26,9 @@ _test:
     mov ax, 0x10
     mov ss, ax
     
-    ;mov ax,cr0
+    mov ax, cr0
     or ax,1
-    ;mov cr0 ,ax
+    mov cr0, ax
     ;a20 line enable fast
     in al, 0x92
     or al, 2
@@ -33,9 +38,9 @@ _test:
     
 bits 32
 ELF_parsing:
-    mov esi , [ebp+0x4] ;esi now points to where stage 2 suppose to be loaded
+    mov esi , [ebp+0x10] ;esi now points to where stage 2 suppose to be loaded
 
-ELF_struct:
+
     
 gdt:
     dq 0
