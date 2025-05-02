@@ -13,6 +13,7 @@ start:
     mov bp, sp
 
     ; Read BPB
+    xor cx, cx
     mov bx, 0x7E00
     mov si, 0x0
     mov al, 1
@@ -36,6 +37,7 @@ start:
     mov [first_data_sector], ax
 
     mov si, ax
+    xor cx, cx
     mov bx, 0x7E00
     ; TODO: root dir is only a single sector
     mov al, 1
@@ -78,6 +80,7 @@ sfn:
     jne name_set
 
     ; TODO: support short file name
+    ; TODO: support longer file names
 name_set:
     mov di, kernel_file
     mov cx, kernel_file_len
@@ -93,6 +96,13 @@ name_set:
     mov si, stage2_file_cluster
     je _file_found
 
+    mov di, inter_stage_file 
+    mov cx, inter_stage_file_len 
+    mov si, bp
+    repe cmpsb
+    mov si, inter_stage_file_cluster 
+    je _file_found
+
     jmp next
 _file_found:
     mov di, [bx + 20]
@@ -102,25 +112,64 @@ _file_found:
     mov [si], di
 
     inc byte [bp + 0xD]
-    cmp byte [bp + 0xD], 2
+    cmp byte [bp + 0xD], 3
     je done
 next:
     add bx, 32
     jmp search_loop
 done:
     add sp, 16
-    mov ax, kernel_file_cluster
 
-    ; possibility: make stage 1.5
-    ; TODO: read ELFs to 0x8000
-    ; Incase everything wont fit we can make stage2 a binary, not elf
-    ; cleanup old shit
-    ; jump to protected mode (also possibly get shit from the bios)
-    ; TODO: parse bootloader ELF to after kernel ELF (program) 
+    xor cx, cx
+    mov bx, 0x8000
+    mov bp, sp
+
+    mov ax, [kernel_file_cluster]
+    mov dx, [kernel_file_cluster+0x2]
+    call traverse_fat_copy_file
+
+    mov ax, [stage2_file_cluster]
+    mov dx, [stage2_file_cluster+0x2]
+    call traverse_fat_copy_file
+
+    push cx
+    push bx
+    mov ax, cx
+    mov cx, 4
+_shift_right:
+    shr ax, 1
+    rcr bx, 1
+    loop _shift_right 
+
+    mov di, bx
+
+    pop bx
+    pop cx
+
+    mov ax, [inter_stage_file_cluster]
+    mov dx, [inter_stage_file_cluster+0x2]
+    call traverse_fat_copy_file
+
+    cmp cx, 0x0007
+    jae _hang
+
+    ; fuck gdb
+    mov ds, di
+    mov es, di
+    ;mov word [inter_stage_seg+2], di
+    jmp 0x14a0:0x0
+    ;jmp far [ds:0x0] 
+
+    ; Cleanup BPB
+    ;add sp, 0x30
+
+    ; Pass the kernel pointer, stage 2 pointer, inter stage pointer (for size calculation) and pointer for end of inter stage
+
+    ; TODO: if this size exceeds 480kb we have a problem
 _hang:
     jmp $
 
-; Traverse (bx dest, dx up 16 bit entry cluster, ax low 16 bit ..)
+; Traverse (cx high 16 bit dest, bx low 16 bit ..., dx up 16 bit entry cluster, ax low 16 bit ..)
 traverse_fat_copy_file:
     ; Check for stack overflow 
     cmp sp, 0x1000 
@@ -131,10 +180,10 @@ traverse_fat_copy_file:
     ; Push all registers
     ; Saving SI, DX (read_sector_lba), ax
     pusha
-    ; Needed? 32 bit subtraction
+    ; FIXME: Needed? 32 bit subtraction
     sub ax, 2
     ; TODO: support more sectors per cluster
-    ; Cluster * BPB_SecPerClus
+    ; FIXME: Cluster * BPB_SecPerClus
     ; mul byte [si+0x2]
     add ax, [first_data_sector]
 
@@ -143,8 +192,8 @@ traverse_fat_copy_file:
     call read_sector_lba
     popa 
     add bx, 0x200
+    adc cx, 0
 
-    ; Do you think im happy writing this code? (1 bit carry flag)
     ; FATOffset (dx:ax) = dx:ax * 4 
     shl ax, 1
     rcl dx, 1
@@ -158,13 +207,14 @@ traverse_fat_copy_file:
 
     ; Remember the start of the FAT sector is just above the root directory
     pusha
-    mov bx, 0x8000
+    mov bx, 0x7e00 
+    xor cx, cx
     mov si, ax
     mov al, 1
     call read_sector_lba
     popa
 
-    add dx, 0x8000
+    add dx, 0x7e00 
     mov si, dx
     ; Pointer to next cluster is stored in SI
     mov ax, [si+0x0]
@@ -183,11 +233,26 @@ _continue:
 _return:
     ret
 
-; Read(bx dest, si LBA, al sector_count)
+; Read(cx high 16 bit dest, bx low 16 bit ..., si LBA, al sector_count)
 read_sector_lba:
     mov [dapack+0x8], si
     mov [dapack+0x2], al
-    mov [dapack+0x4], bx
+
+    mov ax, bx
+    and ax, 0xF
+    mov [dapack+0x4], ax 
+
+    mov dx, cx 
+    mov ax, bx 
+    mov cx, 4
+    ; wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf wtf
+    ; this will work with 20 bit
+_shift_right_loop:
+    shr dx, 1
+    rcr ax, 1
+    loop _shift_right_loop
+
+    mov [dapack+0x6], ax
 
     xor ax, ax
     mov ds, ax
@@ -203,14 +268,21 @@ copy_utf16:
     loop copy_utf16
     ret
 
-bpb_pointer dw 0
-first_data_sector dw 0
+inter_stage_file db 'stage15.bin'
+inter_stage_file_len equ $ - inter_stage_file
 kernel_file db 'kernel.bin' 
 kernel_file_len equ $ - kernel_file
 stage2_file db 'stage2.bin'
 stage2_file_len equ $ - stage2_file
+
+bpb_pointer dw 0
+first_data_sector dw 0
+
+inter_stage_file_cluster dd 0
 kernel_file_cluster dd 0
 stage2_file_cluster dd 0
+
+inter_stage_seg dd 0
 
 dapack:
 db 0x10
